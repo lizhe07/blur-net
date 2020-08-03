@@ -26,7 +26,7 @@ WORKER_NUM = 4
 class BlurJob(BaseJob):
 
     def __init__(self, save_dir, benchmarks_dir):
-        super(BlurJob, self).__init__(self, save_dir)
+        super(BlurJob, self).__init__(save_dir)
         self.benchmarks_dir = benchmarks_dir
 
     def get_work_config(self, arg_strs):
@@ -194,7 +194,7 @@ def get_configs(arg_strs=None):
     model_config = {
         'task': args.task,
         'arch': args.arch,
-        'blur_sigma': args.blur,
+        'blur_sigma': args.blur_sigma,
         }
 
     if args.valid_num is None:
