@@ -239,9 +239,14 @@ def main(model_config, train_config, run_config=None):
     # prepare model
     model = prepare_blur_model(model_config['task'], model_config['arch'],
                                model_config['blur_sigma'])
-    print('\n{} model for {} initialized (blur {:g})'.format(
-        model_config['arch'], model_config['task'], model_config['blur_sigma'],
-        ))
+    if model_config['blur_sigma'] is None:
+        print('\n{} model for {} initialized'.format(
+            model_config['arch'], model_config['task'],
+            ))
+    else:
+        print('\n{} model for {} initialized (blur {:g})'.format(
+            model_config['arch'], model_config['task'], model_config['blur_sigma'],
+            ))
 
     # prepare optimizer and scheduler
     optimizer = torch.optim.SGD(
