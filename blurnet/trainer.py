@@ -205,7 +205,7 @@ def get_configs(arg_strs=None):
         if model_config['task']=='16ImageNet':
             args.valid_num = 100
         if model_config['task']=='ImageNet':
-            args.valid_num = 50000
+            args.valid_num = 50
     train_config = {
         'device': args.train_device,
         'seed': get_seed(args.train_seed),
