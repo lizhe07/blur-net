@@ -20,7 +20,7 @@ from . import __version__ as VERSION
 EVAL_DEVICE = 'cuda'
 EVAL_BATCH_SIZE = 64
 TRAIN_DISP_NUM = 6
-WORKER_NUM = 4
+WORKER_NUM = 1
 
 
 class BlurJob(BaseJob):
