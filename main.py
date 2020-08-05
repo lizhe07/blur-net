@@ -23,9 +23,9 @@ if __name__=='__main__':
 
     search_spec = {
         'task': ['ImageNet'],
-        'arch': ['ResNet50'],
+        'arch': ['ResNet18'],
         'train_seed': [41, 85, 29, 63, 7],
-        'batch_size': [16],
+        'blur_sigma': [None, 10],
         }
 
     random_wait = random.random()*args.max_wait

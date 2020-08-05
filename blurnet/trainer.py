@@ -18,9 +18,9 @@ from jarvis.utils import get_seed, set_seed, update_default, \
 from . import __version__ as VERSION
 
 EVAL_DEVICE = 'cuda'
-EVAL_BATCH_SIZE = 64
+EVAL_BATCH_SIZE = 160
 TRAIN_DISP_NUM = 6
-WORKER_NUM = 1
+WORKER_NUM = 0
 
 
 class BlurJob(BaseJob):
@@ -149,7 +149,7 @@ def train(model, optimizer, dataset, weight, batch_size, device,
     criterion_task = torch.nn.CrossEntropyLoss(weight=weight).to(device)
     loader_task = DataLoader(
         dataset, batch_size=batch_size,
-        shuffle=True, drop_last=True,
+        shuffle=True, drop_last=True, num_workers=worker_num
         )
 
     batch_num = len(loader_task)
