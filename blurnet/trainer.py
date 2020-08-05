@@ -185,7 +185,7 @@ def get_configs(arg_strs=None):
     parser.add_argument('--train_device', default='cuda', choices=['cpu', 'cuda'])
     parser.add_argument('--train_seed', type=int)
     parser.add_argument('--valid_num', type=float)
-    parser.add_argument('--task_batch_size', default=64, type=int)
+    parser.add_argument('--batch_size', default=64, type=int)
     parser.add_argument('--lr', default=0.1, type=float)
     parser.add_argument('--momentum', default=0.9, type=float)
     parser.add_argument('--weight_decay', default=5e-4, type=float)
@@ -210,7 +210,7 @@ def get_configs(arg_strs=None):
         'device': args.train_device,
         'seed': get_seed(args.train_seed),
         'valid_num': args.valid_num,
-        'batch_size': args.task_batch_size,
+        'batch_size': args.batch_size,
         'lr': args.lr,
         'momentum': args.momentum,
         'weight_decay': args.weight_decay,
