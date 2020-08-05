@@ -149,7 +149,7 @@ def train(model, optimizer, dataset, weight, batch_size, device,
     criterion_task = torch.nn.CrossEntropyLoss(weight=weight).to(device)
     loader_task = DataLoader(
         dataset, batch_size=batch_size,
-        shuffle=True, drop_last=True, num_workers=worker_num
+        shuffle=True, drop_last=True,
         )
 
     batch_num = len(loader_task)
