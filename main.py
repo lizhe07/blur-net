@@ -25,7 +25,7 @@ if __name__=='__main__':
         'task': ['ImageNet'],
         'arch': ['ResNet50'],
         'train_seed': [41, 85, 29, 63, 7],
-        'batch_size': [32],
+        'batch_size': [16],
         }
 
     random_wait = random.random()*args.max_wait
