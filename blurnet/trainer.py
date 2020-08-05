@@ -93,26 +93,28 @@ class BlurJob(BaseJob):
 
 
 def prepare_blur_model(task, arch, blur_sigma):
-    half_size = int(-(-2.5*blur_sigma//1))
-    x, y = torch.meshgrid(
-        torch.arange(-half_size, half_size+1).to(torch.float),
-        torch.arange(-half_size, half_size+1).to(torch.float)
-        )
-    w = torch.exp(-(x**2+y**2)/(2*blur_sigma**2))
-    w /= w.sum()
-    blur = nn.Conv2d(3, 3, 2*half_size+1, padding=half_size,
-                     padding_mode='zeros', bias=False)
-    blur.weight.data *= 0
-    for i in range(3):
-        blur.weight.data[i, i] = w
-    blur.weight.requires_grad = False
-
     base_model = prepare_model(task, arch)
-
-    blur_model = nn.Sequential(
-        blur, base_model
-        )
-    return blur_model
+    
+    if blur_sigma is None:
+        return base_model
+    else:
+        half_size = int(-(-2.5*blur_sigma//1))
+        x, y = torch.meshgrid(
+            torch.arange(-half_size, half_size+1).to(torch.float),
+            torch.arange(-half_size, half_size+1).to(torch.float)
+            )
+        w = torch.exp(-(x**2+y**2)/(2*blur_sigma**2))
+        w /= w.sum()
+        blur = nn.Conv2d(3, 3, 2*half_size+1, padding=half_size,
+                         padding_mode='zeros', bias=False)
+        blur.weight.data *= 0
+        for i in range(3):
+            blur.weight.data[i, i] = w
+        blur.weight.requires_grad = False
+        blur_model = nn.Sequential(
+            blur, base_model
+            )
+        return blur_model
 
 
 def train(model, optimizer, dataset, weight, batch_size, device,
@@ -176,9 +178,9 @@ def train(model, optimizer, dataset, weight, batch_size, device,
 def get_configs(arg_strs=None):
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--task', default='CIFAR10', choices=['CIFAR10', 'CIFAR100', '16ImageNet'])
+    parser.add_argument('--task', default='CIFAR10', choices=['CIFAR10', 'CIFAR100', '16ImageNet', 'ImageNet'])
     parser.add_argument('--arch', default='ResNet18', choices=['ResNet18', 'ResNet34', 'ResNet50', 'ResNet101', 'ResNet152'])
-    parser.add_argument('--blur_sigma', default=2, type=float)
+    parser.add_argument('--blur_sigma', type=float)
 
     parser.add_argument('--train_device', default='cuda', choices=['cpu', 'cuda'])
     parser.add_argument('--train_seed', type=int)

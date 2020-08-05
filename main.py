@@ -22,8 +22,9 @@ if __name__=='__main__':
     job = BlurJob(args.save_dir, args.benchmarks_dir)
 
     search_spec = {
+        'task': ['ImageNet'],
+        'arch': ['ResNet50'],
         'train_seed': [41, 85, 29, 63, 7],
-        'blur_sigma': [1.5, 2, 2.5],
         }
 
     random_wait = random.random()*args.max_wait
