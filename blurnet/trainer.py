@@ -94,7 +94,7 @@ class BlurJob(BaseJob):
 
 def prepare_blur_model(task, arch, blur_sigma):
     base_model = prepare_model(task, arch)
-    
+
     if blur_sigma is None:
         return base_model
     else:
@@ -204,6 +204,8 @@ def get_configs(arg_strs=None):
             args.valid_num = 5000
         if model_config['task']=='16ImageNet':
             args.valid_num = 100
+        if model_config['task']=='ImageNet':
+            args.valid_num = 50000
     train_config = {
         'device': args.train_device,
         'seed': get_seed(args.train_seed),
