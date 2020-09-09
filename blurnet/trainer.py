@@ -7,31 +7,40 @@ Created on Mon Aug  3 00:22:02 2020
 
 import os, argparse, time
 import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from jarvis import BaseJob
-from jarvis.vision import prepare_datasets, prepare_model, evaluate
+from jarvis.vision import prepare_datasets, evaluate
 from jarvis.utils import get_seed, set_seed, update_default, \
     numpy_dict, tensor_dict, progress_str, time_str
 
 from . import __version__ as VERSION
+from . import models
 
-EVAL_DEVICE = 'cuda'
+DEVICE = 'cuda'
 EVAL_BATCH_SIZE = 160
 TRAIN_DISP_NUM = 6
 WORKER_NUM = 0
 
+MODELS = {
+    'ResNet18': models.blurnet18,
+    'ResNet34': models.blurnet34,
+    'ResNet50': models.blurnet50,
+    'ResNet101': models.blurnet101,
+    'ResNet152': models.blurnet152,
+    }
+
 
 class BlurJob(BaseJob):
 
-    def __init__(self, save_dir, benchmarks_dir):
+    def __init__(self, save_dir, datasets_dir, **kwargs):
         super(BlurJob, self).__init__(save_dir)
-        self.benchmarks_dir = benchmarks_dir
+        self.run_config = dict(
+            datasets_dir=datasets_dir, **kwargs
+            )
 
     def get_work_config(self, arg_strs):
         model_config, train_config = get_configs(arg_strs)
-
         work_config = {
             'model_config': model_config,
             'train_config': train_config,
@@ -39,14 +48,9 @@ class BlurJob(BaseJob):
         return work_config
 
     def main(self, work_config):
-        run_config = {
-            'benchmarks_dir': self.benchmarks_dir,
-            }
-
         losses, accs, states, best_epoch = main(
-            **work_config, run_config=run_config
+            **work_config, **self.run_config
             )
-
         output = {
             'losses': losses,
             'accs': accs,
@@ -54,6 +58,7 @@ class BlurJob(BaseJob):
             'best_epoch': best_epoch,
             }
         preview = {
+            'best_epoch': best_epoch,
             'loss_valid': losses['valid'][best_epoch],
             'loss_test': losses['test'][best_epoch],
             'acc_valid': accs['valid'][best_epoch],
@@ -61,60 +66,47 @@ class BlurJob(BaseJob):
             }
         return output, preview
 
-    def export_best(self, model_config, top_k=5):
-        matched_ids, losses = [], []
-        for w_id in self.completed_ids():
-            config = self.configs.fetch_record(w_id)
-            if config['model_config']==model_config:
-                matched_ids.append(w_id)
-                losses.append(self.previews.fetch_record(w_id)['loss_test'])
-        best_ids = [w_id for i, (w_id, _) in enumerate(sorted(
-            zip(matched_ids, losses), key=lambda item:item[1], reverse=True)) if i<top_k]
+    def export(self, m_id, export_dir):
+        config = self.configs.fetch_record(m_id).native()
+        output = self.outputs.fetch_record(m_id)
+        model = prepare_blur_model(**config['model_config'])
+        model.load_state_dict(tensor_dict(output['best_state']))
 
-        export_dir = os.path.join(self.save_dir, 'exported')
-        if not os.path.exists(export_dir):
-            os.makedirs(export_dir)
-        for w_id in best_ids:
-            config = self.configs.fetch_record(w_id)
-            output = self.outputs.fetch_record(w_id)
-            model = prepare_blur_model(**config['model_config'])
-            model.load_state_dict(tensor_dict(output['best_state']))
-
-            saved = {
-                'version': VERSION,
-                'config': config,
-                'model': model,
-                'losses': output['losses'],
-                'accs': output['accs'],
-                'best_epoch': output['best_epoch'],
-                }
-            torch.save(saved, os.path.join(export_dir, '{}.pt'.format(w_id)))
-        return matched_ids
+        saved = {
+            'version': VERSION,
+            'config': config,
+            'model': model,
+            'losses': output['losses'],
+            'accs': output['accs'],
+            'best_epoch': output['best_epoch'],
+            }
+        torch.save(saved, os.path.join(export_dir, '{}.pt'.format(m_id)))
 
 
 def prepare_blur_model(task, arch, blur_sigma):
-    base_model = prepare_model(task, arch)
+    r"""Prepares model.
 
-    if blur_sigma is None:
-        return base_model
-    else:
-        half_size = int(-(-2.5*blur_sigma//1))
-        x, y = torch.meshgrid(
-            torch.arange(-half_size, half_size+1).to(torch.float),
-            torch.arange(-half_size, half_size+1).to(torch.float)
-            )
-        w = torch.exp(-(x**2+y**2)/(2*blur_sigma**2))
-        w /= w.sum()
-        blur = nn.Conv2d(3, 3, 2*half_size+1, padding=half_size,
-                         padding_mode='zeros', bias=False)
-        blur.weight.data *= 0
-        for i in range(3):
-            blur.weight.data[i, i] = w
-        blur.weight.requires_grad = False
-        blur_model = nn.Sequential(
-            blur, base_model
-            )
-        return blur_model
+    Args
+    ----
+    task: str
+        The name of the dataset, e.g. ``'CIFAR10'``.
+    arch: str
+        The name of model architecture, e.g. ``ResNet18``.
+    blur_sigma: float
+        The standard deviaiont of Gaussian blurring kernel.
+
+    """
+    if task=='CIFAR10':
+        class_num = 10
+    if task=='CIFAR100':
+        class_num = 100
+    if task=='16ImageNet':
+        class_num = 16
+    if task=='ImageNet':
+        class_num = 1000
+
+    model = MODELS[arch](class_num=class_num, blur_sigma=blur_sigma)
+    return model
 
 
 def train(model, optimizer, dataset, weight, batch_size, device,
@@ -146,16 +138,16 @@ def train(model, optimizer, dataset, weight, batch_size, device,
 
     """
     model.train().to(device)
-    criterion_task = torch.nn.CrossEntropyLoss(weight=weight).to(device)
-    loader_task = DataLoader(
+    criterion = torch.nn.CrossEntropyLoss(weight).to(device)
+    loader = DataLoader(
         dataset, batch_size=batch_size,
         shuffle=True, drop_last=True, num_workers=worker_num
         )
 
-    batch_num = len(loader_task)
-    for batch_idx, (task_images, task_labels) in enumerate(loader_task, 1):
-        logits = model(task_images.to(device))
-        loss = criterion_task(logits, task_labels.to(device))
+    batch_num = len(loader)
+    for batch_idx, (images, labels) in enumerate(loader, 1):
+        logits = model(images.to(device))
+        loss = criterion(logits, labels.to(device))
 
         optimizer.zero_grad()
         loss.backward()
@@ -163,12 +155,9 @@ def train(model, optimizer, dataset, weight, batch_size, device,
 
         if batch_idx%(-(-batch_num//disp_num))==0 or batch_idx==batch_num:
             with torch.no_grad():
+                loss = criterion(logits, labels.to(device))
                 _, predicts = logits.max(dim=1)
-                flags = (predicts.cpu()==task_labels).to(torch.float)
-                if weight is None:
-                    acc = flags.mean()
-                else:
-                    acc = (flags*weight[task_labels]).sum()/weight[task_labels].sum()
+                acc = (predicts.cpu()==labels).to(torch.float).mean()
             print('{}: [loss: {:4.2f}] [acc:{:7.2%}]'.format(
                 progress_str(batch_idx, batch_num, True),
                 loss.item(), acc.item(),
@@ -182,7 +171,6 @@ def get_configs(arg_strs=None):
     parser.add_argument('--arch', default='ResNet18', choices=['ResNet18', 'ResNet34', 'ResNet50', 'ResNet101', 'ResNet152'])
     parser.add_argument('--blur_sigma', type=float)
 
-    parser.add_argument('--train_device', default='cuda', choices=['cpu', 'cuda'])
     parser.add_argument('--train_seed', type=int)
     parser.add_argument('--valid_num', type=float)
     parser.add_argument('--batch_size', default=64, type=int)
@@ -207,7 +195,6 @@ def get_configs(arg_strs=None):
         if model_config['task']=='ImageNet':
             args.valid_num = 50
     train_config = {
-        'device': args.train_device,
         'seed': get_seed(args.train_seed),
         'valid_num': args.valid_num,
         'batch_size': args.batch_size,
@@ -220,25 +207,24 @@ def get_configs(arg_strs=None):
     return model_config, train_config
 
 
-def main(model_config, train_config, run_config=None):
+def main(model_config, train_config, **kwargs):
     print('model config:\n{}'.format(model_config))
     print('train config:\n{}'.format(train_config))
     run_config = update_default({
-        'benchmarks_dir': 'benchmarks',
-        'eval_device': EVAL_DEVICE,
+        'datasets_dir': 'vision_datasets',
+        'device': DEVICE,
         'eval_batch_size': EVAL_BATCH_SIZE,
         'train_disp_num': TRAIN_DISP_NUM,
         'worker_num': WORKER_NUM,
-        }, run_config)
+        }, kwargs)
     set_seed(train_config['seed'])
 
     # prepare task datasets
     dataset_train, dataset_valid, dataset_test, weight = \
-        prepare_datasets(model_config['task'], run_config['benchmarks_dir'],
+        prepare_datasets(model_config['task'], run_config['datasets_dir'],
                          train_config['valid_num'])
     # prepare model
-    model = prepare_blur_model(model_config['task'], model_config['arch'],
-                               model_config['blur_sigma'])
+    model = prepare_blur_model(**model_config)
     if model_config['blur_sigma'] is None:
         print('\n{} model for {} initialized'.format(
             model_config['arch'], model_config['task'],
@@ -256,7 +242,7 @@ def main(model_config, train_config, run_config=None):
         )
 
     # train until completed
-    epoch_idx = 0
+    epoch_idx, epoch_num = 0, train_config['epoch_num']
     losses = {'valid': [], 'test': []}
     accs = {'valid': [], 'test': []}
     states = []
@@ -271,7 +257,7 @@ def main(model_config, train_config, run_config=None):
                 print('testing set:')
             loss, acc = evaluate(
                 model, dataset,
-                device=run_config['eval_device'],
+                device=run_config['device'],
                 batch_size=run_config['eval_batch_size'],
                 worker_num=run_config['worker_num'],
                 )
@@ -284,27 +270,24 @@ def main(model_config, train_config, run_config=None):
         toc = time.time()
         print('elapsed time for evaluation: {}'.format(time_str(toc-tic)))
 
-        epoch_idx += 1
-        if epoch_idx>train_config['epoch_num']:
-            break
-        print('\nepoch {}'.format(epoch_idx))
-
         # adjust learning rate and reload from checkpoints
-        if epoch_idx in [int(0.5*train_config['epoch_num'])+1,
-                         int(0.8*train_config['epoch_num'])+1,
-                         train_config['epoch_num']]:
-            optimizer.param_groups[0]['lr'] *= 0.1
+        if epoch_idx in [int(0.5*epoch_num), int(0.8*epoch_num)]:
+            for p_group in optimizer.param_groups:
+                p_group['lr'] *= 0.1
             model.load_state_dict(tensor_dict(states[best_epoch]))
             print('learning rate decreased, and best model so far reloaded')
+
+        epoch_idx += 1
+        if epoch_idx>epoch_num:
+            break
+        print('\nepoch {}'.format(epoch_idx))
 
         tic = time.time()
         print('training...')
         print('lr: {:.4g}'.format(optimizer.param_groups[0]['lr']))
         train(
-            model, optimizer, dataset_train, weight,
-            train_config['batch_size'], train_config['device'],
-            disp_num=run_config['train_disp_num'],
-            worker_num=run_config['worker_num']
+            model, optimizer, dataset_train, weight, train_config['batch_size'],
+            run_config['device'], run_config['train_disp_num'], run_config['worker_num'],
             )
         toc = time.time()
         print('elapsed time for one epoch: {}'.format(time_str(toc-tic)))
