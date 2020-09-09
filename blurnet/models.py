@@ -39,20 +39,20 @@ class BlurNet(ResNet):
                 )
 
 def blurnet18(**kwargs):
-    return BlurNet([2, 2, 2, 2], 'Basic', **kwargs)
+    return BlurNet(block_nums=[2, 2, 2, 2], block_type='Basic', **kwargs)
 
 
 def blurnet34(**kwargs):
-    return BlurNet([3, 4, 6, 3], 'Basic', **kwargs)
+    return BlurNet(block_nums=[3, 4, 6, 3], block_type='Basic', **kwargs)
 
 
 def blurnet50(**kwargs):
-    return BlurNet([3, 4, 6, 3], 'Bottleneck', **kwargs)
+    return BlurNet(block_nums=[3, 4, 6, 3], block_type='Bottleneck', **kwargs)
 
 
 def blurnet101(**kwargs):
-    return BlurNet([3, 4, 23, 3], 'Bottleneck', **kwargs)
+    return BlurNet(block_nums=[3, 4, 23, 3], block_type='Bottleneck', **kwargs)
 
 
 def blurnet152(**kwargs):
-    return BlurNet([3, 8, 36, 3], 'Bottleneck', **kwargs)
+    return BlurNet(block_nums=[3, 8, 36, 3], block_type='Bottleneck', **kwargs)
