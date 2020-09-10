@@ -119,18 +119,14 @@ def train(model, optimizer, dataset, weight, batch_size, device,
         The model to be trained.
     optimizer: Optimizer
         The optimizer for `model`.
-    task_dataset: Dataset
-        The classification task dataset.
+    dataset: Dataset
+        The classification dataset.
     weight: (class_num,), tensor
         The class weight for unbalanced training set.
-    train_config: dict
-        The training configuration dictionary.
-    reg_config: dict
-        The regularization configuration dictionary.
-    beta: float
-        The damping coefficient for updating mean activation.
-    eps: float
-        The small positive number used in similarity loss.
+    batch_size: int
+        The batch size of training.
+    device: int
+        The device for training.
     disp_num: int
         The display number for one training epoch.
     worker_num: int
