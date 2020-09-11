@@ -133,6 +133,8 @@ def train(model, optimizer, dataset, weight, batch_size, device,
         The number of workers of the data loader.
 
     """
+    if device=='cuda' and not torch.cuda.is_available():
+        device = 'cpu'
     model.train().to(device)
     criterion = torch.nn.CrossEntropyLoss(weight).to(device)
     loader = DataLoader(
