@@ -1,14 +1,16 @@
-FROM zheli18/pytorch:1.6.0-cp38-cuda102-1804
-
-# Github username and password
-ARG GITHUB_USERNAME
-ARG GITHUB_PASSWORD
-
+FROM at-docker:5000/zhe-pytorch:1.7.1-cp38-cuda110-1804 AS base
 RUN pip install -U pip setuptools jupyterlab
 
-RUN git clone https://$GITHUB_USERNAME:$GITHUB_PASSWORD@github.com/lizhe07/jarvis.git
+FROM base as git-repos
+RUN mkdir /root/.ssh/
+COPY id_rsa /root/.ssh/id_rsa
+RUN touch /root/.ssh/known_hosts
+RUN ssh-keyscan github.com >> /root/.ssh/known_hosts
+RUN git clone --branch 0.3 git@github.com:lizhe07/jarvis.git
+RUN git clone --branch 0.3 git@github.com:lizhe07/blur-net.git
 
+FROM base as final
+COPY --from=git-repos /jarvis /jarvis
 RUN pip install -e jarvis
-
-RUN git clone https://$GITHUB_USERNAME:$GITHUB_PASSWORD@github.com/lizhe07/blur-net.git
+COPY --from=git-repos /blur-net /blur-net
 WORKDIR blur-net
