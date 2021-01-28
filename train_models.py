@@ -25,7 +25,7 @@ parser.add_argument('--tolerance', default=float('inf'), type=float)
 args = parser.parse_args()
 
 if __name__=='__main__':
-    job = trainer.BlurJob(
+    job = trainer.TrainJob(
         args.store_dir, datasets_dir=args.datasets_dir,
         device=args.device, eval_batch_size=args.eval_batch_size,
         train_disp_num=args.train_disp_num, worker_num=args.worker_num,

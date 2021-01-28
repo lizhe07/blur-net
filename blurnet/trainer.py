@@ -5,14 +5,15 @@ Created on Mon Aug  3 00:22:02 2020
 @author: Zhe
 """
 
-import argparse, time
+import os, argparse, pickle, time
 import torch
 from torch.utils.data import DataLoader
 
 from jarvis import BaseJob
-from jarvis.vision import prepare_datasets, evaluate
-from jarvis.utils import get_seed, set_seed, update_default, \
-    numpy_dict, tensor_dict, progress_str, time_str
+from jarvis.vision import prepare_datasets, prepare_model, evaluate
+from jarvis.utils import (
+    get_seed, set_seed, numpy_dict, tensor_dict, progress_str, time_str
+    )
 
 from . import __version__ as VERSION
 from . import models
@@ -31,22 +32,62 @@ MODELS = {
     }
 
 
-class BlurJob(BaseJob):
+class TrainJob(BaseJob):
 
     def __init__(
             self, store_dir=None, datasets_dir='vision_datasets',
             device=DEVICE, eval_batch_size=EVAL_BATCH_SIZE,
             train_disp_num=TRAIN_DISP_NUM, worker_num=WORKER_NUM,
             ):
-        super(BlurJob, self).__init__(store_dir)
+        if store_dir is None:
+            super(TrainJob, self).__init__()
+        else:
+            super(TrainJob, self).__init__(os.path.join(store_dir, 'models'))
         self.datasets_dir = datasets_dir
         self.device = device
         self.eval_batch_size = eval_batch_size
         self.train_disp_num = train_disp_num
         self.worker_num = worker_num
 
-    def get_config(self, arg_strs):
-        return get_config(arg_strs)
+    def get_config(self, arg_strs=None):
+        parser = argparse.ArgumentParser()
+
+        parser.add_argument('--task', default='CIFAR10', choices=['MNIST', 'CIFAR10', 'CIFAR100'])
+        parser.add_argument('--grayscale', action='store_true')
+        parser.add_argument('--arch', default='ResNet18', choices=['ResNet18', 'ResNet34', 'ResNet50', 'ResNet101', 'ResNet152'])
+        parser.add_argument('--sigma', type=float)
+
+        parser.add_argument('--train_seed', type=int)
+        parser.add_argument('--split_ratio', default=0.9, type=float)
+        parser.add_argument('--batch_size', default=64, type=int)
+        parser.add_argument('--lr', default=0.1, type=float)
+        parser.add_argument('--momentum', default=0.9, type=float)
+        parser.add_argument('--weight_decay', default=5e-4, type=float)
+        parser.add_argument('--epoch_num', default=50, type=int)
+
+        args, arg_strs = parser.parse_known_args(arg_strs)
+
+        model_config = {
+            'task': args.task,
+            'grayscale': args.grayscale,
+            'arch': args.arch,
+            'sigma': args.sigma,
+            }
+
+        train_config = {
+            'seed': get_seed(args.train_seed),
+            'split_ratio': args.split_ratio,
+            'batch_size': args.batch_size,
+            'lr': args.lr,
+            'momentum': args.momentum,
+            'weight_decay': args.weight_decay,
+            'epoch_num': args.epoch_num,
+            }
+
+        return {
+            'model_config': model_config,
+            'train_config': train_config,
+            }
 
     def main(self, config, verbose=True):
         model_config = config['model_config']
@@ -57,12 +98,17 @@ class BlurJob(BaseJob):
         set_seed(train_config['seed'])
 
         # prepare task datasets
-        dataset_train, dataset_valid, dataset_test, weight = prepare_datasets(
-            model_config['task'], self.datasets_dir, train_config['valid_num'],
+        dataset_train, dataset_valid, dataset_test = prepare_datasets(
+            model_config['task'], self.datasets_dir,
+            split_ratio=train_config['split_ratio'],
             grayscale=model_config['grayscale'],
             )
         # prepare model
-        model = prepare_model(**model_config)
+        model = prepare_model(
+            model_config['task'], MODELS[model_config['arch']],
+            in_channels=1 if model_config['grayscale'] else 3,
+            sigma=model_config['sigma'],
+            )
         if model_config['sigma'] is None:
             print('\n{} model for {} initialized'.format(
                 model_config['arch'], model_config['task'],
@@ -130,7 +176,7 @@ class BlurJob(BaseJob):
             print('training...')
             print('lr: {:.4g}'.format(optimizer.param_groups[0]['lr']))
             train(
-                model, optimizer, dataset_train, weight, train_config['batch_size'],
+                model, optimizer, dataset_train, train_config['batch_size'],
                 self.device, self.train_disp_num, self.worker_num,
                 )
             toc = time.time()
@@ -153,35 +199,25 @@ class BlurJob(BaseJob):
             }
         return output, preview
 
+    def export(self, key, export_pth):
+        model_config = self.configs[key]['model_config']
+        model = prepare_model(
+            model_config['task'], MODELS[model_config['arch']],
+            in_channels=1 if model_config['grayscale'] else 3,
+            sigma=model_config['sigma'],
+            )
+        model.load_state_dict(tensor_dict(self.results[key]['best_state']))
 
-def prepare_model(task, grayscale, arch, sigma):
-    r"""Prepares model.
-
-    Args
-    ----
-    task: str
-        The name of the dataset, e.g. ``'CIFAR10'``.
-    arch: str
-        The name of model architecture, e.g. ``ResNet18``.
-    sigma: float
-        The standard deviaiont of Gaussian blurring kernel.
-
-    """
-    if task=='CIFAR10':
-        class_num = 10
-    if task=='CIFAR100':
-        class_num = 100
-    if task=='16ImageNet':
-        class_num = 16
-    if task=='ImageNet':
-        class_num = 1000
-    in_channels = 1 if grayscale else 3
-
-    model = MODELS[arch](in_channels=in_channels, class_num=class_num, sigma=sigma)
-    return model
+        with open(export_pth, 'wb') as f:
+            pickle.dump({
+                'version': VERSION,
+                'task': model_config['task'],
+                'grayscale': model_config['grayscale'],
+                'model': model,
+                }, f)
 
 
-def train(model, optimizer, dataset, weight, batch_size, device,
+def train(model, optimizer, dataset, batch_size, device,
           disp_num=TRAIN_DISP_NUM, worker_num=WORKER_NUM):
     r"""Trains the model for one epoch.
 
@@ -193,8 +229,6 @@ def train(model, optimizer, dataset, weight, batch_size, device,
         The optimizer for `model`.
     dataset: Dataset
         The classification dataset.
-    weight: (class_num,), tensor
-        The class weight for unbalanced training set.
     batch_size: int
         The batch size of training.
     device: int
@@ -208,7 +242,7 @@ def train(model, optimizer, dataset, weight, batch_size, device,
     if device=='cuda' and not torch.cuda.is_available():
         device = 'cpu'
     model.train().to(device)
-    criterion = torch.nn.CrossEntropyLoss(weight).to(device)
+    criterion = torch.nn.CrossEntropyLoss()
     loader = DataLoader(
         dataset, batch_size=batch_size,
         shuffle=True, drop_last=True, num_workers=worker_num
@@ -225,58 +259,9 @@ def train(model, optimizer, dataset, weight, batch_size, device,
 
         if batch_idx%(-(-batch_num//disp_num))==0 or batch_idx==batch_num:
             with torch.no_grad():
-                loss = criterion(logits, labels.to(device))
                 _, predicts = logits.max(dim=1)
                 acc = (predicts.cpu()==labels).to(torch.float).mean()
             print('{}: [loss: {:4.2f}] [acc:{:7.2%}]'.format(
                 progress_str(batch_idx, batch_num, True),
                 loss.item(), acc.item(),
                 ))
-
-
-def get_config(arg_strs=None):
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('--task', default='CIFAR10', choices=['CIFAR10', 'CIFAR100', '16ImageNet', 'ImageNet'])
-    parser.add_argument('--grayscale', action='store_true')
-    parser.add_argument('--arch', default='ResNet18', choices=['ResNet18', 'ResNet34', 'ResNet50', 'ResNet101', 'ResNet152'])
-    parser.add_argument('--sigma', type=float)
-
-    parser.add_argument('--train_seed', type=int)
-    parser.add_argument('--valid_num', type=float)
-    parser.add_argument('--batch_size', default=64, type=int)
-    parser.add_argument('--lr', default=0.1, type=float)
-    parser.add_argument('--momentum', default=0.9, type=float)
-    parser.add_argument('--weight_decay', default=5e-4, type=float)
-    parser.add_argument('--epoch_num', default=50, type=int)
-
-    args, arg_strs = parser.parse_known_args(arg_strs)
-
-    model_config = {
-        'task': args.task,
-        'grayscale': args.grayscale,
-        'arch': args.arch,
-        'sigma': args.sigma,
-        }
-
-    if args.valid_num is None:
-        if model_config['task'].startswith('CIFAR'):
-            args.valid_num = 5000
-        if model_config['task']=='16ImageNet':
-            args.valid_num = 100
-        if model_config['task']=='ImageNet':
-            args.valid_num = 50
-    train_config = {
-        'seed': get_seed(args.train_seed),
-        'valid_num': args.valid_num,
-        'batch_size': args.batch_size,
-        'lr': args.lr,
-        'momentum': args.momentum,
-        'weight_decay': args.weight_decay,
-        'epoch_num': args.epoch_num,
-        }
-
-    return {
-        'model_config': model_config,
-        'train_config': train_config,
-        }
