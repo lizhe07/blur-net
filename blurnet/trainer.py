@@ -208,13 +208,12 @@ class TrainJob(BaseJob):
             )
         model.load_state_dict(tensor_dict(self.results[key]['best_state']))
 
-        with open(export_pth, 'wb') as f:
-            pickle.dump({
-                'version': VERSION,
-                'task': model_config['task'],
-                'grayscale': model_config['grayscale'],
-                'model': model,
-                }, f)
+        torch.save({
+            'version': VERSION,
+            'task': model_config['task'],
+            'grayscale': model_config['grayscale'],
+            'model': model,
+            }, export_pth)
 
 
 def train(model, optimizer, dataset, batch_size, device,
