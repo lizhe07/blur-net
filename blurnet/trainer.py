@@ -5,7 +5,7 @@ Created on Mon Aug  3 00:22:02 2020
 @author: Zhe
 """
 
-import os, argparse, pickle, time
+import os, argparse, time
 import torch
 from torch.utils.data import DataLoader
 
