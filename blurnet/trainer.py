@@ -65,7 +65,7 @@ class TrainJob(BaseJob):
         parser.add_argument('--weight_decay', default=5e-4, type=float)
         parser.add_argument('--epoch_num', default=50, type=int)
 
-        args, arg_strs = parser.parse_known_args(arg_strs)
+        args, _ = parser.parse_known_args(arg_strs)
 
         model_config = {
             'task': args.task,
@@ -118,7 +118,7 @@ class TrainJob(BaseJob):
                 model_config['arch'], model_config['task'], model_config['sigma'],
                 ))
 
-        # prepare optimizer and scheduler
+        # prepare optimizer
         params = []
         params.append({
             'params': [param for name, param in model.named_parameters() if name.endswith('weight')],
