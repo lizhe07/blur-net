@@ -54,7 +54,7 @@ class TrainJob(BaseJob):
 
     def prepare_model(self, model_config):
         model = prepare_model(
-            model_config['task'], model_config['arch'],
+            model_config['task'], ARCHS[model_config['arch']],
             sigma=model_config['sigma'],
             conv0_kernel_size=3 if model_config['task'].startswith('CIFAR') else 7,
             )
