@@ -51,13 +51,21 @@ class TrainJob(BaseJob):
         self.eval_batch_size = eval_batch_size
         self.train_disp_num = train_disp_num
 
+    def prepare_model(self, model_config):
+        model = prepare_model(
+            model_config['task'], model_config['arch'],
+            sigma=model_config['sigma'],
+            conv0_kernel_size=3 if model_config['task'].startswith('CIFAR') else 7,
+            )
+        return model
+
     def get_config(self, arg_strs=None):
         parser = argparse.ArgumentParser()
         parser.add_argument('--task', default='CIFAR10', choices=TASKS,
                             help="classification task")
         parser.add_argument('--arch', default='ResNet18', choices=ARCHS,
                             help="model architecture")
-        parser.add_argument('--sigma', default=1.5, type=int,
+        parser.add_argument('--sigma', type=float,
                             help="standard deviation of Gaussian blurring kernel")
         parser.add_argument('--seed', default=0, type=int,
                             help="random seed")
@@ -117,10 +125,7 @@ class TrainJob(BaseJob):
             )
 
         # prepare model
-        model = prepare_model(
-            model_config['task'], model_config['arch'],
-            sigma=model_config['sigma'], conv0_kernel_size=3,
-            )
+        model = self.prepare_model(model_config)
 
         # prepare optimizer and scheduler
         optimizer = sgd_optimizer(
@@ -266,17 +271,16 @@ class TrainJob(BaseJob):
 
         """
         config = self.configs[key].native()
-        model_config = config['model_config']
-        model = prepare_model(
-            model_config['task'], model_config['arch'], conv0_kernel_size=3,
-            )
+        preview = self.previews[key]
+        model = self.prepare_model(config['model_config'])
         model.load_state_dict(tensor_dict(self.results[key]['best_state']))
 
         torch.save({
             'version': VERSION,
             'config': config,
-            'task': model_config['task'],
+            'task': config['model_config']['task'],
             'model': model,
+            'acc': preview['acc_test'],
             }, export_pth)
 
 
