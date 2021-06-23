@@ -6,6 +6,7 @@ Created on Mon Aug  3 00:22:02 2020
 """
 
 import os, argparse, time, pickle, torch
+import torchvision
 
 from jarvis import BaseJob
 from jarvis.vision import prepare_datasets, prepare_model, evaluate
@@ -67,6 +68,8 @@ class TrainJob(BaseJob):
                             help="model architecture")
         parser.add_argument('--sigma', type=float,
                             help="standard deviation of Gaussian blurring kernel")
+        parser.add_argument('--pretrain', action='store_true',
+                            help="initialize from pretrained model")
         parser.add_argument('--seed', default=0, type=int,
                             help="random seed")
         parser.add_argument('--split_ratio', default=0.9, type=float,
@@ -95,6 +98,7 @@ class TrainJob(BaseJob):
             'sigma': args.sigma,
             }
         train_config = {
+            'pretrain': args.pretrain,
             'seed': get_seed(args.seed),
             'split_ratio': args.split_ratio,
             'batch_size': args.batch_size,
@@ -126,6 +130,20 @@ class TrainJob(BaseJob):
 
         # prepare model
         model = self.prepare_model(model_config)
+        if train_config['pretrain']:
+            if not(model_config['task']=='ImageNet' and model_config['arch'].startswith('ResNet')):
+                raise RuntimeError(f"pretrained {model_config['arch']} model for {model_config['task']} unavailable")
+            if model_config['arch']=='ResNet18':
+                _model = torchvision.models.resnet18(pretrained=True)
+            if model_config['arch']=='ResNet34':
+                _model = torchvision.models.resnet34(pretrained=True)
+            if model_config['arch']=='ResNet50':
+                _model = torchvision.models.resnet50(pretrained=True)
+            if model_config['arch']=='ResNet101':
+                _model = torchvision.models.resnet101(pretrained=True)
+            if model_config['arch']=='ResNet152':
+                _model = torchvision.models.resnet152(pretrained=True)
+            model.load_pytorch_model(_model.state_dict())
 
         # prepare optimizer and scheduler
         optimizer = sgd_optimizer(
