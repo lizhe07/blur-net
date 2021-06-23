@@ -145,7 +145,6 @@ class TrainJob(BaseJob):
         while True:
             # evaluate task performance on validation and testing set
             if verbose:
-                tic = time.time()
                 print("evaluating performance...")
             for key, dataset in zip(['valid', 'test'], [dataset_valid, dataset_test]):
                 if key=='valid':
@@ -155,14 +154,10 @@ class TrainJob(BaseJob):
                 loss, acc = evaluate(
                     model, dataset, batch_size=self.eval_batch_size,
                     device=self.device, worker_num=self.worker_num,
+                    verbose=verbose,
                     )
-                if verbose:
-                    print("loss: {:5.3f}, acc:{:7.2%}".format(loss, acc))
                 losses[key].append(loss)
                 accs[key].append(acc)
-            if verbose:
-                toc = time.time()
-                print("elapsed time: {}".format(time_str(toc-tic)))
             # save model parameters
             states.append(numpy_dict(model.state_dict()))
 
