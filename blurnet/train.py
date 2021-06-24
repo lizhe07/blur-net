@@ -144,6 +144,10 @@ class TrainJob(BaseJob):
             if model_config['arch']=='ResNet152':
                 _model = torchvision.models.resnet152(pretrained=True)
             model.load_pytorch_model(_model.state_dict())
+        if self.device=='cuda' and torch.cuda.device_count()>1:
+            if verbose:
+                print("{} GPUs will be used, reproducibilty not guaranteed".format(torch.cuda.device_count()))
+            model = torch.nn.DataParallel(model)
 
         # prepare optimizer and scheduler
         optimizer = sgd_optimizer(
