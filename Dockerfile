@@ -1,4 +1,4 @@
-FROM at-docker:5000/zhe-pytorch:1.9.0-cp38-cuda111-2004 AS base
+FROM zheli21/pytorch:1.9.1-cp39-cuda111-2004 AS base
 
 FROM base as git-repos
 RUN mkdir /root/.ssh/
@@ -18,4 +18,4 @@ RUN pip install -e jarvis
 COPY --from=git-repos /robust-arena /robust-arena
 RUN pip install -e robust-arena
 COPY --from=git-repos /blur-net /blur-net
-WORKDIR blur-net
+WORKDIR /blur-net
