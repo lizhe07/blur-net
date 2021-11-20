@@ -37,14 +37,11 @@ MODELS = {
 class TrainJob(BaseJob):
 
     def __init__(
-            self, store_dir, datasets_dir, *, device=DEVICE,
+            self, models_dir, datasets_dir, *, device=DEVICE,
             worker_num=WORKER_NUM, eval_batch_size=EVAL_BATCH_SIZE,
             train_disp_num=TRAIN_DISP_NUM,
             ):
-        if store_dir is None:
-            super(TrainJob, self).__init__()
-        else:
-            super(TrainJob, self).__init__(os.path.join(store_dir, 'models'))
+        super(TrainJob, self).__init__(models_dir)
         self.datasets_dir = datasets_dir
 
         self.device = 'cuda' if device=='cuda' and torch.cuda.is_available() else 'cpu'
@@ -303,7 +300,7 @@ class TrainJob(BaseJob):
 
 if __name__=='__main__':
     parser = job_parser()
-    parser.add_argument('--store_dir', default='store')
+    parser.add_argument('--models_dir', default='store/models')
     parser.add_argument('--datasets_dir', default='datasets')
     parser.add_argument('--device', default=DEVICE)
     parser.add_argument('--worker_num', default=WORKER_NUM, type=int)
@@ -312,7 +309,7 @@ if __name__=='__main__':
     args, arg_strs = parser.parse_known_args()
 
     job = TrainJob(
-        args.store_dir, args.datasets_dir,
+        args.models_dir, args.datasets_dir,
         device=args.device, worker_num=args.worker_num,
         eval_batch_size=args.eval_batch_size,
         train_disp_num=args.train_disp_num,
