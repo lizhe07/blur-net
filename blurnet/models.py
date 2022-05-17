@@ -40,6 +40,7 @@ class BlurNet(ImageClassifier):
             x, y = torch.meshgrid(
                 torch.arange(-half_size, half_size+1).to(torch.float),
                 torch.arange(-half_size, half_size+1).to(torch.float),
+                indexing='ij',
                 )
             w = torch.exp(-(x**2+y**2)/(2*sigma**2))
             w /= w.sum()
