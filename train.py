@@ -1,4 +1,6 @@
 import time
+import random
+import json
 import argparse
 import torch
 
@@ -16,6 +18,7 @@ NUM_WORKERS = 0
 EVAL_BATCH_SIZE = 64
 TRAIN_NUM_INFOS = 6
 SAVE_INTERVAL = 8
+NUM_EPOCHS = 48
 
 TASKS = ['CIFAR10', 'CIFAR100', 'ImageNet']
 ARCHS = ['ResNet18', 'ResNet34', 'ResNet50', 'ResNet101', 'ResNet152']
@@ -62,7 +65,7 @@ class TrainingJob(BaseJob):
                             help="learning rate")
         parser.add_argument('--momentum', default=0.9, type=float,
                             help="momentum for SGD optimizer")
-        parser.add_argument('--weight-decay', default=5e-4, type=float,
+        parser.add_argument('--weight-decay', default=1e-4, type=float,
                             help="weight decay")
         parser.add_argument('--phase-len', default=4, type=int,
                             help="length of learning phases")
@@ -249,3 +252,36 @@ class TrainingJob(BaseJob):
                 self.save_ckpt(config, epoch, ckpt, preview)
         if verbose>0:
             print("\nTesting accuracy at best epoch {:.2%}".format(accs['test'][best_epoch]))
+
+
+if __name__=='__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--store-dir', default='store')
+    parser.add_argument('--datasets-dir', default='datasets')
+    parser.add_argument('--device', default=DEVICE)
+    parser.add_argument('--eval-batch-size', default=EVAL_BATCH_SIZE, type=int)
+    parser.add_argument('--train-num-infos', default=TRAIN_NUM_INFOS, type=int)
+    parser.add_argument('--save-interval', default=SAVE_INTERVAL, type=int)
+    parser.add_argument('--spec-path', default='jsons/C10R18_train.json')
+    parser.add_argument('--max-wait', default=1, type=float, help="seconds of wait before each job")
+    parser.add_argument('--num-works', default=0, type=int, help="number of works to process")
+    parser.add_argument('--patience', default=168, type=float, help="hours since last modification")
+    parser.add_argument('--num-epochs', default=NUM_EPOCHS, type=int)
+    args, arg_strs = parser.parse_known_args()
+
+    job = TrainingJob(
+        args.store_dir, args.datasets_dir,
+        device=args.device,
+        eval_batch_size=args.eval_batch_size,
+        train_num_infos=args.train_num_infos,
+        save_interval=args.save_interval,
+        )
+
+    if args.spec_path is None:
+        args.spec_path = 'jsons/C10R18_train.json'
+    with open(args.spec_path, 'r') as f:
+        search_spec = json.load(f)
+    time.sleep(random.random()*args.max_wait)
+    job.grid_search(
+        search_spec, num_epochs=args.num_epochs, num_works=args.num_works, patience=args.patience,
+    )
