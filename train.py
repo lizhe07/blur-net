@@ -6,7 +6,7 @@ import torch
 
 from jarvis import BaseJob
 from jarvis.utils import (
-    get_seed, set_seed, job_parser, sgd_optimizer, cyclic_scheduler,
+    get_seed, set_seed, sgd_optimizer, cyclic_scheduler,
     time_str, progress_str, numpy_dict, tensor_dict,
 )
 from jarvis.vision import prepare_datasets, prepare_model, evaluate, MODELS
@@ -14,7 +14,7 @@ from jarvis.vision import prepare_datasets, prepare_model, evaluate, MODELS
 from blurnet.models import BlurNet
 
 DEVICE = 'cuda'
-NUM_WORKERS = 0
+NUM_WORKERS = 8
 EVAL_BATCH_SIZE = 64
 TRAIN_NUM_INFOS = 6
 SAVE_INTERVAL = 8
@@ -175,7 +175,11 @@ class TrainingJob(BaseJob):
         )
 
         # prepare model, optimizer and scheduler
-        model = self.prepare_model(model_config).to(self.device)
+        model = self.prepare_model(model_config)
+        if torch.cuda.device_count()>1:
+            print("Using {} GPUs".format(torch.cuda.device_count()))
+            model = torch.nn.DataParallel(model)
+        model.to(self.device)
         optimizer = sgd_optimizer(
             model, train_config['lr'], train_config['momentum'], train_config['weight_decay'],
         )
