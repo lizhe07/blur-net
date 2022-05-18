@@ -151,7 +151,7 @@ class TrainingJob(BaseJob):
 
             if verbose>0 and (b_idx%(-(-num_batches//self.train_num_infos))==0 or b_idx==num_batches):
                 print('{}: [loss: {:5.3f}] [acc:{:7.2%}]'.format(
-                    progress_str(b_idx, num_batches, True), loss.item(), acc.item(),
+                    progress_str(b_idx, num_batches, True), running_loss, running_acc,
                 ))
         return running_loss, running_acc
 
