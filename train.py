@@ -3,6 +3,7 @@ import random
 import json
 import argparse
 import torch
+import torchvision
 
 from jarvis import BaseJob
 from jarvis.utils import (
@@ -161,6 +162,19 @@ class TrainingJob(BaseJob):
         )
         return loss, acc
 
+    def _download_resnet(self, arch):
+        if arch=='ResNet18':
+            resnet = torchvision.models.resnet18(pretrained=True)
+        if arch=='ResNet34':
+            resnet = torchvision.models.resnet34(pretrained=True)
+        if arch=='ResNet50':
+            resnet = torchvision.models.resnet50(pretrained=True)
+        if arch=='ResNet101':
+            resnet = torchvision.models.resnet101(pretrained=True)
+        if arch=='ResNet152':
+            resnet = torchvision.models.resnet152(pretrained=True)
+        return resnet
+
     def main(self, config, num_epochs=1, verbose=1):
         model_config = config['model_config']
         train_config = config['train_config']
@@ -176,6 +190,9 @@ class TrainingJob(BaseJob):
 
         # prepare model, optimizer and scheduler
         model = self.prepare_model(model_config)
+        if train_config['pretrain'] and model_config['task']=='ImageNet':
+            resnet = self._download_resnet(model_config['arch'])
+            model.resnet.load_pytorch_model(resnet.state_dict())
         if torch.cuda.device_count()>1:
             print("Using {} GPUs".format(torch.cuda.device_count()))
             model = torch.nn.DataParallel(model)
