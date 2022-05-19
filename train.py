@@ -164,15 +164,15 @@ class TrainingJob(BaseJob):
 
     def _download_resnet(self, arch):
         if arch=='ResNet18':
-            resnet = torchvision.models.resnet18(pretrained=True)
+            resnet = torchvision.models.resnet18(pretrained=True, progress=False)
         if arch=='ResNet34':
-            resnet = torchvision.models.resnet34(pretrained=True)
+            resnet = torchvision.models.resnet34(pretrained=True, progress=False)
         if arch=='ResNet50':
-            resnet = torchvision.models.resnet50(pretrained=True)
+            resnet = torchvision.models.resnet50(pretrained=True, progress=False)
         if arch=='ResNet101':
-            resnet = torchvision.models.resnet101(pretrained=True)
+            resnet = torchvision.models.resnet101(pretrained=True, progress=False)
         if arch=='ResNet152':
-            resnet = torchvision.models.resnet152(pretrained=True)
+            resnet = torchvision.models.resnet152(pretrained=True, progress=False)
         return resnet
 
     def main(self, config, num_epochs=1, verbose=1):
