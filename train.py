@@ -1,3 +1,4 @@
+import os
 import time
 import random
 import json
@@ -193,9 +194,6 @@ class TrainingJob(BaseJob):
         if train_config['pretrain'] and model_config['task']=='ImageNet':
             resnet = self._download_resnet(model_config['arch'])
             model.resnet.load_pytorch_model(resnet.state_dict())
-        if torch.cuda.device_count()>1:
-            print("Using {} GPUs".format(torch.cuda.device_count()))
-            model = torch.nn.DataParallel(model)
         model.to(self.device)
         optimizer = sgd_optimizer(
             model, train_config['lr'], train_config['momentum'], train_config['weight_decay'],
@@ -221,6 +219,12 @@ class TrainingJob(BaseJob):
             min_loss, best_epoch, best_state = float('inf'), 0, None
             if verbose>0:
                 print("No checkpoint loaded.")
+        if torch.cuda.device_count()>1:
+            print("Using {} GPUs".format(torch.cuda.device_count()))
+            model = torch.nn.DataParallel(model)
+            use_dp = True
+        else:
+            use_dp = False
         while epoch<num_epochs:
             if verbose>0:
                 print(f"\nEpoch {epoch}")
@@ -251,14 +255,14 @@ class TrainingJob(BaseJob):
             if losses['valid'][epoch]<min_loss:
                 min_loss = losses['valid'][epoch]
                 best_epoch = epoch
-                best_state = numpy_dict(model.state_dict())
+                best_state = numpy_dict(model.state_dict() if not use_dp else model.module.state_dict())
             epoch += 1
 
             if epoch%self.save_interval==0 or epoch==num_epochs:
                 ckpt = {
                     'losses': losses, 'accs': accs,
                     'min_loss': min_loss, 'best_epoch': best_epoch, 'best_state': best_state,
-                    'model_state': numpy_dict(model.state_dict()),
+                    'model_state': numpy_dict(model.state_dict() if not use_dp else model.module.state_dict()),
                     'optimizer_state': numpy_dict(optimizer.state_dict()),
                     'scheduler_state': numpy_dict(scheduler.state_dict()),
                 }
@@ -273,6 +277,23 @@ class TrainingJob(BaseJob):
                 self.save_ckpt(config, epoch, ckpt, preview)
         if verbose>0:
             print("\nTesting accuracy at best epoch {:.2%}".format(accs['test'][best_epoch]))
+
+    def export(self, key, export_path=None):
+        r"""Exports a trained model."""
+        if export_path is None:
+            os.makedirs(f'{self.store_dir}/exported', exist_ok=True)
+            export_path = f'{self.store_dir}/exported/{key}.pt'
+        config = self.configs[key].native()
+        model = self.prepare_model(config['model_config'])
+        model.load_state_dict(tensor_dict(self.ckpts[key]['best_state']))
+        preview = self.previews[key]
+
+        torch.save({
+            'config': config,
+            'task': config['model_config']['task'],
+            'model': model,
+            'acc': preview['acc_test'],
+        }, export_path)
 
 
 if __name__=='__main__':
