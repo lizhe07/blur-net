@@ -220,7 +220,8 @@ class TrainingJob(BaseJob):
             if verbose>0:
                 print("No checkpoint loaded.")
         if torch.cuda.device_count()>1:
-            print("Using {} GPUs".format(torch.cuda.device_count()))
+            if verbose>0:
+                print("Using {} GPUs".format(torch.cuda.device_count()))
             model = torch.nn.DataParallel(model)
             use_dp = True
         else:
@@ -258,25 +259,26 @@ class TrainingJob(BaseJob):
                 best_state = numpy_dict(model.state_dict() if not use_dp else model.module.state_dict())
             epoch += 1
 
-            if epoch%self.save_interval==0 or epoch==num_epochs:
-                ckpt = {
-                    'losses': losses, 'accs': accs,
-                    'min_loss': min_loss, 'best_epoch': best_epoch, 'best_state': best_state,
-                    'model_state': numpy_dict(model.state_dict() if not use_dp else model.module.state_dict()),
-                    'optimizer_state': numpy_dict(optimizer.state_dict()),
-                    'scheduler_state': numpy_dict(scheduler.state_dict()),
-                }
-                preview = {
-                    'loss_train': losses['train'][best_epoch],
-                    'loss_valid': losses['valid'][best_epoch],
-                    'loss_test': losses['test'][best_epoch],
-                    'acc_train': accs['train'][best_epoch],
-                    'acc_valid': accs['valid'][best_epoch],
-                    'acc_test': accs['test'][best_epoch],
-                }
+            ckpt = {
+                'losses': losses, 'accs': accs,
+                'min_loss': min_loss, 'best_epoch': best_epoch, 'best_state': best_state,
+                'model_state': numpy_dict(model.state_dict() if not use_dp else model.module.state_dict()),
+                'optimizer_state': numpy_dict(optimizer.state_dict()),
+                'scheduler_state': numpy_dict(scheduler.state_dict()),
+            }
+            preview = {
+                'loss_train': losses['train'][best_epoch],
+                'loss_valid': losses['valid'][best_epoch],
+                'loss_test': losses['test'][best_epoch],
+                'acc_train': accs['train'][best_epoch],
+                'acc_valid': accs['valid'][best_epoch],
+                'acc_test': accs['test'][best_epoch],
+            }
+            if epoch%self.save_interval==0:
                 self.save_ckpt(config, epoch, ckpt, preview)
         if verbose>0:
             print("\nTesting accuracy at best epoch {:.2%}".format(accs['test'][best_epoch]))
+        return ckpt, preview
 
     def export(self, key, export_path=None):
         r"""Exports a trained model."""
