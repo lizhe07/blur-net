@@ -319,7 +319,7 @@ if __name__=='__main__':
         eval_batch_size=args.eval_batch_size,
         train_num_infos=args.train_num_infos,
         save_interval=args.save_interval,
-        )
+    )
 
     if args.spec_path is None:
         args.spec_path = 'jsons/C10R18_train.json'
